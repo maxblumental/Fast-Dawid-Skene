@@ -23,6 +23,7 @@ SOFTWARE.
 from __future__ import print_function
 
 import argparse
+import json
 import os
 import loader
 import algorithms
@@ -38,6 +39,12 @@ def run(args):
 
     ind_to_question_dict = l.get_ind_to_question_dict()
     ind_to_annotation_dict = l.get_ind_to_annotation_dict()
+    with open('ind_to_question.json', 'w') as f:
+        f.write(json.dumps(str(ind_to_question_dict)))
+    with open('ind_to_annotation.json', 'w') as f:
+        f.write(json.dumps(str(ind_to_annotation_dict)))
+    with open('ind_to_annotator.json', 'w') as f:
+        f.write(json.dumps(str(l.ind_to_annotator_dict)))
 
     result_annotations = pd.DataFrame(data=result, columns=['Annotation'])
     result_annotations.reset_index(level=0, inplace=True)

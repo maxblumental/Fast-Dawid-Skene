@@ -43,7 +43,9 @@ def main(args, data, gold=None):
 
     assert args.algorithm in ['FDS', 'DS', 'H', 'MV'], 'Invalid algorithm'
 
-    result = run(data, args=args)
+    result, question_classes, error_rates = run(data, args=args)
+    np.save('question_classes', question_classes)
+    np.save('error_rates', error_rates)
 
     if gold is not None:
         acc = (gold == result).mean()
@@ -100,6 +102,8 @@ def run(responses, args, tol=0.0001, CM_tol=0.005, max_iter=100):
     if args.verbose:
         print("Iter\tlog-likelihood\tdelta-CM\tdelta-ER")
 
+    soft_classes = None
+
     while not converged:
         nIter += 1
 
@@ -110,7 +114,7 @@ def run(responses, args, tol=0.0001, CM_tol=0.005, max_iter=100):
         (class_marginals, error_rates) = m_step(counts, question_classes)
 
         # E-step
-        question_classes = e_step(counts, class_marginals, error_rates, mode)
+        question_classes, soft_classes = e_step(counts, class_marginals, error_rates, mode)
 
         # End measuring time
         # end = time.time()
@@ -147,7 +151,7 @@ def run(responses, args, tol=0.0001, CM_tol=0.005, max_iter=100):
 
     result = np.argmax(question_classes, axis=1)
 
-    return result
+    return result, soft_classes, old_error_rates
 
 
 def responses_to_counts(responses):
@@ -230,7 +234,7 @@ def initialize(counts, mode):
     else:
         for p in range(nQuestions):
             question_classes[p, :] = response_sums[p, :] / \
-                np.sum(response_sums[p, :], dtype=float)
+                                     np.sum(response_sums[p, :], dtype=float)
 
     return question_classes
 
@@ -272,7 +276,7 @@ def m_step(counts, question_classes):
             sum_over_responses = np.sum(error_rates[k, j, :])
             if sum_over_responses > 0:
                 error_rates[k, j, :] = error_rates[
-                    k, j, :] / float(sum_over_responses)
+                                       k, j, :] / float(sum_over_responses)
 
     return (class_marginals, error_rates)
 
@@ -315,23 +319,23 @@ def e_step(counts, class_marginals, error_rates, mode):
         for j in range(nClasses):
             estimate = class_marginals[j]
             estimate *= np.prod(np.power(error_rates[:,
-                                                     j, :], counts[i, :, :]))
+                                         j, :], counts[i, :, :]))
 
             question_classes[i, j] = estimate
         if mode == 'H' or mode == 'DS':
             question_sum = np.sum(question_classes[i, :])
             if question_sum > 0:
                 question_classes[i, :] = question_classes[
-                    i, :] / float(question_sum)
+                                         i, :] / float(question_sum)
         else:
             indices = np.argwhere(question_classes[i, :] == np.max(
                 question_classes[i, :])).flatten()
             final_classes[i, np.random.choice(indices)] = 1
 
     if mode == 'H' or mode == 'DS':
-        return question_classes
+        return question_classes, question_classes
     else:
-        return final_classes
+        return final_classes, question_classes
 
 
 def calc_likelihood(counts, class_marginals, error_rates):
@@ -359,7 +363,6 @@ def calc_likelihood(counts, class_marginals, error_rates):
     for i in range(nPatients):
         patient_likelihood = 0.0
         for j in range(nClasses):
-
             class_prior = class_marginals[j]
             patient_class_likelihood = np.prod(
                 np.power(error_rates[:, j, :], counts[i, :, :]))
